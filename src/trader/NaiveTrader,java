@@ -1,0 +1,20 @@
+package trader;
+
+import model.Order;
+import model.Order.Side;
+
+public class NaiveTrader {
+    public static void main(String[] args) {
+        Runnable r = () -> {
+            try {
+                System.out.println(new Order("NAIVE", Side.BUY, 100, 10));
+                System.out.println(new Order("NAIVE", Side.SELL, 101, 5));
+                System.out.println(new Order("NAIVE", Side.BUY, 102, 7));
+            } catch (Exception ignored) {}
+        };
+
+        Thread t = new Thread(r);
+        t.start();
+        r.run();
+    }
+}
