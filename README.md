@@ -1,62 +1,89 @@
-# Order Book Matching Engine
+# Order-Book Matching Engine
 
-Java 11 concurrency training module for a single-stock matching engine.
+Professional, beginner-friendly Java concurrency training module demonstrating a simplified order-book matching engine.
 
-## Run
+Key highlights:
+- Menu-driven CLI with a `file` or `manual` input modes.
+- Manual input ends when you type the sentinel `DONE` on a new line.
+- Concurrent trader workers submit orders to a single matching engine thread.
+- Matches are confirmed asynchronously; confirmations may randomly fail (simulated).
 
-Use the bundled sample input:
+## Requirements
+
+- Java 11 or newer
+- A POSIX-like shell (commands shown work on Linux/macOS terminals)
+
+## Quick build & run
+
+From the repository root:
 
 ```bash
-javac $(find src -name '*.java')
-java -cp src Main src/orders.txt
+mkdir -p out
+find src -name '*.java' > sources.txt
+javac -d out @sources.txt
+
+# Run with the bundled sample orders file
+java -cp out Main src/orders.txt
+
+# Or start manual entry mode (type orders then `DONE`)
+java -cp out Main
 ```
 
-You can also pipe orders through stdin:
+## Order format
+
+Each order is a single line with 5 fields separated by spaces:
+
+TRADER_NAME BUY|SELL SYMBOL QUANTITY PRICE
+
+Example:
+
+T1 BUY AAPL 100 150.00
+
+Type `DONE` (uppercase) on an empty line to finish manual input and let the program proceed to matching and confirmations.
+
+## Example output (trimmed)
+
+```
+ENGINE STARTED
+[TraderPool-1] T1 submitted: BUY AAPL 100 @150.0
+Matched: BUY(T1) vs SELL(T2) -> Trade(id=1) - confirmation pending
+Confirmed trades: 2 | Failed confirms: 1
+Summary: Submitted=7, Matches=3, Confirmed=2, Failed=1, Unmatched=1
+```
+
+Actual confirmation/results vary slightly because the confirmation step intentionally simulates latency and occasional failures.
+
+## File and responsibility map
+
+- [src/Main.java](src/Main.java): program entry, input modes, lifecycle orchestration
+- [src/engine/MatchingEngine.java](src/engine/MatchingEngine.java): single matching loop, order book, and match logic
+- [src/trader/TraderTask.java](src/trader/TraderTask.java): trader worker that submits orders into the shared queue
+- [src/trader/NaiveTrader.java](src/trader/NaiveTrader.java): small raw-`Thread` warm-up demo
+- [src/confirmation/TradeConfirmer.java](src/confirmation/TradeConfirmer.java): simulated confirmation (latency + random failure)
+- [src/pitfalls/Pitfalls.java](src/pitfalls/Pitfalls.java): educational demos (race conditions, deadlocks, volatile vs Atomic, CompletableFuture patterns)
+
+## Concurrency primitives demonstrated
+
+- `Thread` / `Runnable` — trader tasks and simple demos
+- `ExecutorService` — fixed thread pools for traders and confirmation workers
+- `BlockingQueue` (`LinkedBlockingQueue`) — producer/consumer handoff between traders and engine
+- `volatile` — engine stop flag to publish state between threads
+- `synchronized` / guarded collections — protect shared lists (trade history, event log)
+- `ReentrantLock.tryLock(timeout)` — non-blocking critical section with backoff
+- `CompletableFuture` — asynchronous confirmation pipeline and aggregation using `allOf(...).join()`
+
+## Running the Pitfalls demos
 
 ```bash
-java -cp src Main < src/orders.txt
+java -cp out pitfalls.Pitfalls
 ```
 
-## Sample Output
+Each demo prints a broken and a fixed variant so you can compare the observable behavior.
 
-Representative run; confirmation results vary because failures are randomized.
+## Contributing
 
-```text
-Total Orders Submitted: 7
-Total Matches Found: 3
-Confirmed Trades: 2
-Failed Confirmations: 1
-Unmatched Orders Remaining: 1
-```
+Small improvements, clearer examples, or additional pitfalls are welcome. Open an issue or send a PR.
 
-## Class Map
+## License
 
-- `src/Main.java` - parses input, wires the thread pools, waits for confirmations, and prints the final summary.
-- `src/trader/TraderTask.java` - trader worker submitted to the fixed thread pool.
-- `src/trader/NaiveTrader.java` - warm-up demo for raw `Thread` usage.
-- `src/engine/MatchingEngine.java` - single matching engine thread with `volatile`, `synchronized`, `ReentrantLock`, and `CompletableFuture` coordination.
-- `src/confirmation/TradeConfirmer.java` - synchronous confirmation step used by the async pipeline and failure simulation.
-- `src/pitfalls/Pitfalls.java` - four standalone demos covering race conditions, deadlock, counters, and premature `get()` calls.
-
-## Notes
-
-- The engine is intentionally single-threaded.
-- Trader submission is concurrent, but each trader submits its own orders sequentially.
-- Confirmation failures are random and are expected in normal runs.
-
-## How It Works
-
-1. `Main` reads orders and groups them by trader name.
-2. One trader task is created per trader and placed in a fixed thread pool.
-3. Each trader task pushes orders into a shared blocking queue.
-4. The matching engine reads from the queue, stores orders, and looks for the first BUY/SELL pair where `BUY price >= SELL price`.
-5. When a match is found, confirmation runs in a separate thread pool with `CompletableFuture`.
-6. Main waits for traders to finish, stops the engine, waits for confirmations, and prints the summary.
-
-## What to Say When Explaining It
-
-- `BlockingQueue` is used so trader threads can safely hand work to the engine.
-- `volatile` is used for the engine stop flag because only the main thread writes it.
-- `ReentrantLock.tryLock()` is used so the engine can back off instead of waiting forever.
-- `synchronized` protects the trade history list when confirmations add results.
-- `CompletableFuture` keeps confirmations asynchronous, so the engine does not freeze while waiting.
+This repository is provided for educational purposes. Feel free to reuse examples for learning.
